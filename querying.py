@@ -8,28 +8,40 @@ import math, string
 
 from utilfst import printstrings
 
-index_file = sys.argv[1]
-queries_file = sys.argv[2]
-output_file = sys.argv[3]
-n_best = 100 #sys.argv[4]
+use_grapheme_confusion = False
 
-with open(index_file,'rb') as f:
-# with open('testing/test.json','rb') as f:
+if len(sys.argv)==1:
+    print('Usage: python querying.py index_file.json queries_file.xml output_file.xml OPT:n_best')
+    sys.exit()
+elif len(sys.argv)==4:
+    index_file = sys.argv[1]
+    queries_file = sys.argv[2]
+    output_file = sys.argv[3]
+elif len(sys.argv)==6:
+    index_file = sys.argv[1]
+    queries_file = sys.argv[2]
+    output_file = sys.argv[3]
+    use_grapheme_confusion = True
+    n_best = int(sys.argv[4])
+    alpha = float(sys.argv[5])
+
+
+with open(index_file,'rb') as f: # with open('testing/test.json','rb') as f:
     words = json.load(f)
 
 # To inspect an XML file: "cat output/reference.xml | xmllint --format - "
 # To inspect a JSON file: "python -m json.tool index/reference.json"
 
 # Load grapheme_confusion FST
-printable_ST = fst.SymbolTable().read_text('FSTs/symbol_table.txt')
-grapheme_confusion = fst.Fst.read('FSTs/grapheme_confusion.fst')
-grapheme_confusion = grapheme_confusion.set_input_symbols(printable_ST)
-grapheme_confusion = grapheme_confusion.set_output_symbols(printable_ST)
-print grapheme_confusion.num_arcs(0)
-grapheme_confusion.prune(weight = 10)
-print grapheme_confusion.num_arcs(0)
-
-# grapheme_confusion.arcsort()
+if use_grapheme_confusion:
+    printable_ST = fst.SymbolTable().read_text('FSTs/symbol_table.txt')
+    grapheme_confusion = fst.Fst.read('FSTs/grapheme_confusion.fst')
+    grapheme_confusion = grapheme_confusion.set_input_symbols(printable_ST)
+    grapheme_confusion = grapheme_confusion.set_output_symbols(printable_ST)
+    # print grapheme_confusion.num_arcs(0)
+    grapheme_confusion.prune(weight = 10)
+    # print grapheme_confusion.num_arcs(0)
+    # grapheme_confusion.arcsort()
 
 index_name = '.'.join(index_file.split('/')[-1].split('.')[0:-1])
 fst_vocab = fst.Fst.read('FSTs/vocab_'+index_name+'.fst')
@@ -56,12 +68,14 @@ def alternatives(sequence):
 
     composition = fst.compose(fst_vocab, fst.compose(grapheme_confusion, fst_sequence)).rmepsilon().arcsort()
 #     composition.prune(weight = 3)
-    alters = printstrings(composition, nshortest=1, syms=printable_ST, weight=True)
+    alters = printstrings(composition, nshortest=n_best, syms=printable_ST, weight=True)
+    scores = []
     if alters:
         print alters
+        scores = [float(alt[1]) for alt in alters]
         alters = [alt[0].split(' </w>')[:-1] for alt in alters]
         alters = [[''.join(word.split(' ')) for word in alt] for alt in alters]
-    return alters
+    return alters, scores
 
 def perform_query(query):
     # perform the query
@@ -86,7 +100,6 @@ def perform_query(query):
                 score = score * word_in_index['score']
                 
                 scores.extend([word_in_index['score']])
-                
             else:
                 success = False
                 break
@@ -106,7 +119,6 @@ queries_root = queries_tree.getroot()
 
 root = ET.Element('kwslist', {'kwlist_filename': 'IARPA-babel202b-v1.0d_conv-dev.kwlist.xml', 'language': 'swahili', 'system_id': ''})
 
-# startTime = time.clock();
 for query_leaf in queries_root:
     # Parse the query
     kwid = query_leaf.attrib['kwid']
@@ -118,19 +130,19 @@ for query_leaf in queries_root:
         
     hits = perform_query(query)    
     
-    if not hits:
+    if not hits and use_grapheme_confusion:
 #         print "No hits for query", kwid, query 
-        alt_queries = alternatives(query)
-        for alt_query in alt_queries:
-            hits.extend(perform_query(alt_query))
+        alt_queries, scores = alternatives(query)
+        for alt_query, score in zip(alt_queries, scores): 
+            alt_hits = perform_query(alt_query)
+            for alt_hit in alt_hits:
+                alt_hit['score'] = str(float(alt_hit['score']) + alpha * score)
+            hits.extend(alt_hits) 
 
-    score_rn_cst = sum([float(hit['score']) for hit in hits])    
+    score_rn_cst = sum([float(hit['score']) for hit in hits]) # the score renormalization constant
     for hit in hits:
         hit['score'] = str(float(hit['score'])/score_rn_cst)
         ET.SubElement(query_tree, 'kw', hit)
-
-
-# print time.clock()-startTime
 
 # save the XML tree
 ET.ElementTree(root).write(output_file, encoding='UTF-8', xml_declaration=False)
