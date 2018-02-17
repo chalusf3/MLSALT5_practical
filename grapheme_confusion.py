@@ -60,15 +60,14 @@ with open('lib/kws/grapheme.map') as f:
         confusion_matrix[index[formatted_line[0]]][index[formatted_line[1]]] = float(formatted_line[2])
 
 for b in range(len(characters)):
-    s = 0.0 # records # times we *observed* b
-    for a in range(len(characters)):
-        s = s+confusion_matrix[a][b]
+    # s = 0.0 # records # times we *observed* b
+    # for a in range(len(characters)):
+    #     s = s+confusion_matrix[a][b]
+    s = sum([confusion_matrix[a][b] for a in range(len(characters))])  
     if s!=0.0:
         for a in range(len(characters)):
             confusion_matrix[a][b] = confusion_matrix[a][b] / s
-# NOW: confusion_matrix[a][b] = proba(a was recognized as b) = P(true = a, recognized = b)
-
-
+# NOW: confusion_matrix[a][b] = proba(a was recognized as b) = P(true = a|recognized = b)
 
 # Rename sil by <sil>
 index['<sil>'] = index['sil']
@@ -80,7 +79,6 @@ for c in ['<eps>']+index.keys():
 
 # save the symbol table
 printable_ST.write_text('FSTs/symbol_table.txt')
-
 
 
 # Build an FST which corrects the errors: maps <estim> to <truth> with probability confusion_matrix[<truth>][<estim>]
