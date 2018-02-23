@@ -1,13 +1,23 @@
-import json, sys
-
-# Future ideas: save each word as a single file, use XML instead of JSON for consistency
+import json, sys, argparse
 
 words = {}
-# Format: words = {'word1': [{'filename': BLABLA, 'channel': 1, ..., 'score': 1, 'following_word': (wordlabel, idx in the wordlabel array)}], 
+# Format: words = {'word1': [{'filename': BLABLA, 'channel': 1, ..., 'score': 1, 'following_word': (wordlabel, idx in the wordlabel array)}, {}], 
 #                  'word2': [{'filename': LABLAB, 'channel': 1, ..., 'score': 1, 'following_word': (wordlabel, idx in the wordlabel array)}]}
 
-ctm_file = sys.argv[1]
-index_file = sys.argv[2]
+parser = argparse.ArgumentParser()
+parser.add_argument('ctm_file', help="ASR output file (.ctm)")
+parser.add_argument('index_file', help="Output index file (.json)")
+
+args = parser.parse_args()
+ctm_file = args.ctm_file
+index_file = args.index_file
+
+# if len(sys.argv) == 3:
+#     ctm_file = sys.argv[1]
+#     index_file = sys.argv[2]
+# else:
+#     print "Usage: python indexing.py ASR_output.ctm index_file.json"
+#     sys.exit()
 
 with open(ctm_file,'r') as f:
 # with open('testing/test.ctm', 'r') as f:
@@ -55,4 +65,3 @@ with open(ctm_file,'r') as f:
 with open(index_file,'wb') as f:
 # with open('testing/test.json','wb') as f:
     json.dump(words, f)
-#    pickle.dump(words, f, pickle.HIGHEST_PROTOCOL)

@@ -45,10 +45,8 @@ def print_unique_string_in_language(message):
     s = ''.join(message_chars)
     return s
 
-special_characters = ["'",'-','_',':','</w>']
+special_characters = ["'",'-','_',':','</w>','<','>','(',')']
 characters = ['sil'] + list(string.ascii_lowercase) + special_characters
-
-
 
 # build the confusion matrix
 index = dict(zip(characters, range(len(characters))))
@@ -56,17 +54,18 @@ confusion_matrix = [[0 for x in range(len(characters))] for y in range(len(chara
 with open('lib/kws/grapheme.map') as f:
     for line in f:
         formatted_line = line[0:-1].split(' ')
-#         print formatted_line, index[formatted_line[0]], index[formatted_line[1]], float(formatted_line[2])
+        # print formatted_line, index[formatted_line[0]], index[formatted_line[1]], float(formatted_line[2])
         confusion_matrix[index[formatted_line[0]]][index[formatted_line[1]]] = float(formatted_line[2])
 
 for b in range(len(characters)):
-    # s = 0.0 # records # times we *observed* b
-    # for a in range(len(characters)):
-    #     s = s+confusion_matrix[a][b]
     s = sum([confusion_matrix[a][b] for a in range(len(characters))])  
     if s!=0.0:
         for a in range(len(characters)):
             confusion_matrix[a][b] = confusion_matrix[a][b] / s
+    else:
+        for a in range(len(characters)):
+            confusion_matrix[a][b] = 0
+        confusion_matrix[b][b] = 1
 # NOW: confusion_matrix[a][b] = proba(a was recognized as b) = P(true = a|recognized = b)
 
 # Rename sil by <sil>
@@ -77,9 +76,18 @@ printable_ST = fst.SymbolTable()
 for c in ['<eps>']+index.keys():
     printable_ST.add_symbol(c)
 
+# for c in range(0,2**20):
+#     printable_ST.add_symbol(str(c))
+
 # save the symbol table
 printable_ST.write_text('FSTs/symbol_table.txt')
 
+# build a sigma FST: accepting any and outputting epsilon
+compiler = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymbols=True, keep_osymbols=True)
+for c in index.keys():
+    print >> compiler, '0 0 %s <eps>' % c
+print >> compiler, '0'
+compiler.compile().write('FSTs/sigma.fst') 
 
 # Build an FST which corrects the errors: maps <estim> to <truth> with probability confusion_matrix[<truth>][<estim>]
 compiler = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymbols=True, keep_osymbols=True)
@@ -87,33 +95,28 @@ for truth in index.keys():#[0:4]:
     for estim in index.keys():#[0:4]:
         score = confusion_matrix[index[truth]][index[estim]]
         if score > 0: 
-            print >> compiler, '0 1 '+estim+' '+truth+' '+str(-math.log(score))
+            print >> compiler, '0 0 '+estim+' '+truth+' '+str(-math.log(score))
 for c in special_characters:
-    print >> compiler, '0 1 '+c+' '+c
-print >> compiler, '1'
+    print >> compiler, '0 0 '+c+' '+c
+print >> compiler, '0'
 confuser = compiler.compile()
-confuser = confuser.closure().rmepsilon().arcsort()
+confuser = confuser.rmepsilon().arcsort()
 save_autom(confuser, 'grapheme_confusion')
-confuser.write('/home/fc443/MLSALT5/Practical/FSTs/grapheme_confusion.fst')
+confuser.write('FSTs/grapheme_confusion.fst')
 
-
-
-
-
-
-# Build an FSA which only accepts sequences of terms in index_file
+# Build an FSA which only accepts sequences of terms in index_file (a vocabulary acceptor)
 with open(index_file,'rb') as f:
 # with open('testing/test.json','rb') as f:
     words = json.load(f)
 
-vocab_words = {word: set() for word in words.keys()}
+vocab_words = {word: set() for word in words.keys()} # a dictionnary which maps each word to the words that followed it
 for word in words.keys():
     followers = set([w['following_word'][0] for w in words[word] if w['following_word']])
     vocab_words[word] = vocab_words[word].union(followers)
 del words
-word_nodes = {word: (None,None) for word in vocab_words.keys()}
+word_nodes = {word: (None,None) for word in vocab_words.keys()} # to record from which state to which state word spanned. 
 
-# Create FSA
+# Create FSA accepting only those words in the index
 compiler_accept_vocab = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymbols=True, keep_osymbols=True)
 c = 0
 print >> compiler_accept_vocab, '0'
@@ -130,10 +133,10 @@ for word in word_nodes.keys():
     c = c+1
 
 for word in word_nodes.keys():
-    for follower in vocab_words[word]:
+    for follower in vocab_words[word]: # add an arc from last state of word to first state of follower
         print >> compiler_accept_vocab, str(word_nodes[word][1]) + ' ' + str(word_nodes[follower][0]) + ' <eps> <eps>'
 
-for c in special_characters+['<sil>']:
+for c in special_characters:#+['<sil>']:
     print >> compiler, '0 0 '+c+' '+c
 
 fst_vocab = compiler_accept_vocab.compile().arcsort()

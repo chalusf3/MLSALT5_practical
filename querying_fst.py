@@ -30,7 +30,7 @@ elif len(sys.argv)==6:
 
 # To inspect an XML file: "cat output/reference.xml | xmllint --format - "
 # To inspect a JSON file: "python -m json.tool index/reference.json"
-
+# python querying_fst.py index_fst/reference.fst index_fst/reference_arr.pd lib/kws/queries.xml output_fst/reference_fst_out.xml &
 with open(index_arr_file,'rb') as f: # with open('testing/test.json','rb') as f:
     words = pickle.load(f)
 
@@ -138,7 +138,7 @@ def format_fst_string(input):
     return output
 
 def perform_query_fst(query):
-    print query
+    # print query
     # create a fsa for query
     query_compiler = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymbols=True, keep_osymbols=True)
     # print >> query_compiler, '0 0 <eps> <eps>'
@@ -171,6 +171,7 @@ def perform_query_fst(query):
     # save_autom(compos_fst, 'trash/c'+query[0])
     # save_autom(query_fst, 'trash/q'+query[0])
     hits = printstrings(compos_fst, nshortest=2**10, syms=printable_ST, weight=True, project_output=False)
+    print hits
     hits = [(format_fst_string(hit[0]), hit[1]) for hit in hits]
     
     out_hits = []
@@ -182,15 +183,15 @@ def perform_query_fst(query):
         dur = 0
         score = 1
         for idx in hit[0]:
-            dur += float(words[hit[0][0]][3])
-            score *= float(words[hit[0][0]][5])
+            dur += float(words[idx][3])
+            score *= float(words[idx][5])
         out_hits.append({'file': filename, 
-                        'channel': str(channel), 
-                        'tbeg': str(tbeg), 
-                        'dur': str(dur), 
-                        'score': str(score),#**(1.0/(len(query)))), 
-                        'decision': 'YES'})
-    print len(out_hits)
+                         'channel': str(channel), 
+                         'tbeg': str(tbeg), 
+                         'dur': str(dur), 
+                         'score': str(score),#**(1.0/(len(query)))), 
+                         'decision': 'YES'})
+    # print len(out_hits)
     return out_hits
 
 queries_tree = ET.parse(queries_file)
@@ -226,7 +227,7 @@ for query_leaf in queries_root:
     
     score_rn_cst = sum([float(hit['score']) for hit in hits]) # the score renormalization constant
     for hit in hits:
-        hit['score'] = str(float(hit['score'])/score_rn_cst)
+        # hit['score'] = str(float(hit['score'])/score_rn_cst)
         ET.SubElement(query_tree, 'kw', hit)
     #####
 

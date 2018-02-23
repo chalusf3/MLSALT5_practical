@@ -27,7 +27,7 @@ def format_line(line):
         line[j] = float(line[j])
     line[4] = line[4].lower()
     filename, channel, tbeg, dur, word, score = line
-    return filename, channel, tbeg, dur, word, score 
+    return filename, int(channel), tbeg, dur, word, score 
 
 printable_ST = fst.SymbolTable().read_text('FSTs/symbol_table.txt')
 index_compiler = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymbols=True, keep_osymbols=True)
@@ -38,7 +38,7 @@ with open(ctm_file,'r') as f:
 # with open('testing/test.ctm', 'r') as f:
     from_state = -1 # state FROM which the last word's arc will go
     to_state = 0 # index of state TO which the last word's arc will go
-    print >> index_compiler, '0' 
+    # print >> index_compiler, '0' 
 
     # prev_fn, _, prev_tend = format_line(f[0]) # those variables always store the filename of the previous word and time at which it ended. 
     prev_fn = None
@@ -83,6 +83,8 @@ with open(ctm_file,'r') as f:
 # print >> index_compiler, '%d' % to_state
 
 fst_index = index_compiler.compile()
+
+# print fst_index.text()[0:1000]
 
 fst_index = fst.determinize(fst_index.rmepsilon()).minimize().arcsort()
 
