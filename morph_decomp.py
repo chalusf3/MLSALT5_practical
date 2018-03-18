@@ -13,6 +13,9 @@ root = tree.getroot()
 for query_leaf in root:
     # Parse the query
     query = query_leaf[0].text.split(' ')
+    for q in query:
+        if not q in dictionnary:
+            print '%s not in the morph.kwslist.dct dictionnary' % q 
     translated_query = ' '.join([dictionnary[q] for q in query])
     query_leaf[0].text = ' '.join([dictionnary[q] for q in query])
 
@@ -20,11 +23,8 @@ ET.ElementTree(root).write('output/queries_morph.kwslist.xml', encoding='UTF-8',
 
 
 
-
-
-
-
 dictionnary = {}
+# with open('lib/dicts/morph.kwslist.dct') as f:
 with open('lib/dicts/morph.dct') as f:
     for line in f:
         line_formatted = line[0:-1].split('\t') 
@@ -50,10 +50,12 @@ with open('lib/ctms/'+file+'.ctm','r') as f:
         if line_formatted[4] in dictionnary:
             words = dictionnary[line_formatted[4]]
         else:
+            print '%s was not found in the morph.dct dictionary' % line_formatted[4]
             words = [line_formatted[4]]
         n_words = len(words)
         # generate an array of new lines and append them to new_lines (without \n at the end)
-        new_lines = [[line_formatted[0], line_formatted[1], line_formatted[2]+c*line_formatted[3]/n_words, line_formatted[3]/n_words, w, line_formatted[5]**(1.0/n_words)] for c, w in enumerate(words)]
+        line_formatted[3] = line_formatted[3]/n_words
+        new_lines = [[line_formatted[0], line_formatted[1], line_formatted[2]+c*line_formatted[3], line_formatted[3], w, line_formatted[5]] for c, w in enumerate(words)]
         new_lines = [' '.join([str(field) for field in new_line]) for new_line in new_lines]
         translated_lines.extend(new_lines) 
 

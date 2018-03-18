@@ -12,12 +12,7 @@ args = parser.parse_args()
 ctm_file = args.ctm_file
 index_file = args.index_file
 
-# if len(sys.argv) == 3:
-#     ctm_file = sys.argv[1]
-#     index_file = sys.argv[2]
-# else:
-#     print "Usage: python indexing.py ASR_output.ctm index_file.json"
-#     sys.exit()
+# c = 0
 
 with open(ctm_file,'r') as f:
 # with open('testing/test.ctm', 'r') as f:
@@ -59,6 +54,10 @@ with open(ctm_file,'r') as f:
             if new_entry['tbeg'] - (last_word_entry['tbeg'] + last_word_entry['dur'])<0.5:
                 words[last_word[0]][last_word[1]]['following_word'] = follower_ID
         last_word = follower_ID
+
+        # c = c+1
+        # if c == 10:
+        #     break
         
                 
 # save the dictionary as a JSON

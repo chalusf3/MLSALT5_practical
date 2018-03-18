@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys, os, json
 sys.path.append('/home/wjb31//src/openfst//openfst-1.6.3/INSTALL_DIR/lib/python2.7/site-packages/')
 sys.path.append('/home/wjb31//src/openfst//specializer-master/')
@@ -6,6 +7,7 @@ import pywrapfst as fst
 import specializer
 import utilfst
 import math, string
+# export PATH=/home/wjb31/src/openfst/openfst-1.6.3/INSTALL_DIR/bin/:$PATH
 
 index_file = sys.argv[1]
 
@@ -18,44 +20,19 @@ def save_autom(autom, name):
     for line in autom.text():
         f.write(line)
 
-def count_paths(autom):
-    autom = autom.copy().topsort()
-    l = [0]*autom.num_states()
-    l[autom.start()] = 1
-    for s in autom.states():
-        for a in autom.arcs(s):
-            l[a.nextstate]+=l[s]
-    return l[-1]
-def total_num_arcs(autom):
-    s = 0
-    for state in autom.states():
-        s += autom.num_arcs(state)
-    return s
-def minimize_and_print_stat(autom):
-    print(autom.num_states(), total_num_arcs(autom))
-    autom = fst.determinize(autom.copy().minimize().rmepsilon())
-    print(autom.num_states(), total_num_arcs(autom))
-    return autom    
-def print_unique_string_in_language(message):
-    message_lines = message.text().split('\n')[0:-2]
-    message_chars = [line.split('\t')[2] for line in message_lines]
-    for ii in range(0,len(message_chars)):
-        if message_chars[ii] == '<space>':
-            message_chars[ii] = ' '
-    s = ''.join(message_chars)
-    return s
-
 special_characters = ["'",'-','_',':','</w>','<','>','(',')']
 characters = ['sil'] + list(string.ascii_lowercase) + special_characters
 
 # build the confusion matrix
 index = dict(zip(characters, range(len(characters))))
 confusion_matrix = [[0 for x in range(len(characters))] for y in range(len(characters))] # confusion_matrix[a][b] = #times a was recognized as b
+confusion_matrix_alt = [[0 for x in range(len(characters))] for y in range(len(characters))] 
 with open('lib/kws/grapheme.map') as f:
     for line in f:
         formatted_line = line[0:-1].split(' ')
         # print formatted_line, index[formatted_line[0]], index[formatted_line[1]], float(formatted_line[2])
         confusion_matrix[index[formatted_line[0]]][index[formatted_line[1]]] = float(formatted_line[2])
+        confusion_matrix_alt[index[formatted_line[0]]][index[formatted_line[1]]] = float(formatted_line[2])
 
 for b in range(len(characters)):
     s = sum([confusion_matrix[a][b] for a in range(len(characters))])  
@@ -64,25 +41,33 @@ for b in range(len(characters)):
             confusion_matrix[a][b] = confusion_matrix[a][b] / s
     else:
         for a in range(len(characters)):
-            confusion_matrix[a][b] = 0
-        confusion_matrix[b][b] = 1
+            confusion_matrix[a][b] = 0.0
+        confusion_matrix[b][b] = 1.0
 # NOW: confusion_matrix[a][b] = proba(a was recognized as b) = P(true = a|recognized = b)
 
-# Rename sil by <sil>
-index['<sil>'] = index['sil']
+for a in range(len(characters)):
+    s = sum(confusion_matrix_alt[a]) # s = #times the true a was seen
+    if s != 0.0:
+        confusion_matrix_alt[a] = [x/s for x in confusion_matrix_alt[a]]
+    else:
+        confusion_matrix_alt[a] = [0.0]*len(characters)
+        confusion_matrix_alt[a][a] = 1.0
+# NOW: confusion_matrix_alt[a][b] = P(recognized = b | true = a), recognized is a sort of confuser: it creates the confusion
+
+# Rename sil by <eps> in those tables
+index['<eps>'] = index['sil']
 del index['sil']
 
+# Create the symbol table
 printable_ST = fst.SymbolTable()
-for c in ['<eps>']+index.keys():
-    printable_ST.add_symbol(c)
-
-# for c in range(0,2**20):
-#     printable_ST.add_symbol(str(c))
-
+printable_ST.add_symbol('<eps>')
+for c in index.keys():
+    if c != '<eps>':
+        printable_ST.add_symbol(c)
 # save the symbol table
 printable_ST.write_text('FSTs/symbol_table.txt')
 
-# build a sigma FST: accepting any and outputting epsilon
+# Build a sigma FST: accepting any and outputting epsilon
 compiler = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymbols=True, keep_osymbols=True)
 for c in index.keys():
     print >> compiler, '0 0 %s <eps>' % c
@@ -94,6 +79,7 @@ compiler = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymb
 for truth in index.keys():#[0:4]:
     for estim in index.keys():#[0:4]:
         score = confusion_matrix[index[truth]][index[estim]]
+        # score = confusion_matrix[index[estim]][index[truth]]
         if score > 0: 
             print >> compiler, '0 0 '+estim+' '+truth+' '+str(-math.log(score))
 for c in special_characters:
@@ -103,6 +89,20 @@ confuser = compiler.compile()
 confuser = confuser.rmepsilon().arcsort()
 save_autom(confuser, 'grapheme_confusion')
 confuser.write('FSTs/grapheme_confusion.fst')
+
+# Build an FST which makes the errors: maps <truth> to <estim> with probability P[estim|truth] = confusion_matrix_alt[truth][estim] = P(recognized = estim | true = truth)
+compiler = fst.Compiler(isymbols=printable_ST, osymbols=printable_ST, keep_isymbols=True, keep_osymbols=True)
+for truth in index.keys():
+    for estim in index.keys():
+        score = confusion_matrix_alt[index[truth]][index[estim]]
+        if score > 0:
+            print >> compiler, '0 0 '+truth+' '+estim+' '+str(-math.log(score))
+for c in special_characters:
+    print >> compiler, '0 0 '+c+' '+c
+print >> compiler, '0'
+error_maker_fst = compiler.compile().rmepsilon().arcsort()
+save_autom(error_maker_fst, 'error_maker_fst')
+error_maker_fst.write('FSTs/error_maker.fst')
 
 # Build an FSA which only accepts sequences of terms in index_file (a vocabulary acceptor)
 with open(index_file,'rb') as f:
@@ -139,14 +139,15 @@ for word in word_nodes.keys():
 for c in special_characters:#+['<sil>']:
     print >> compiler, '0 0 '+c+' '+c
 
-fst_vocab = compiler_accept_vocab.compile().arcsort()
+fst_vocab = compiler_accept_vocab.compile()
+# save_autom(fst_vocab.arcsort(), 'vocab')
+fst_vocab = fst.determinize(fst_vocab.rmepsilon()).minimize().arcsort()
 index_name = '.'.join(index_file.split('/')[-1].split('.')[0:-1])
 fst_vocab.write('FSTs/vocab_'+index_name+'.fst')
 
-
-
-
-
+# erroneous_vocab = fst.compose(error_maker_fst, fst_vocab).project(project_output=False).rmepsilon()
+# erroneous_vocab = fst.determinize(erroneous_vocab).minimize()
+# erroneous_vocab.write('FSTs/erroneous_vocab_'+index_name+'.fst')
 
 
 
