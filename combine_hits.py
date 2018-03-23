@@ -155,14 +155,14 @@ def combine_and_score(hits_files, gamma_output, gamma_inputs, weights):
 if __name__ == "__main__":
 
     # Load and parse the XML hits list in dictionaries
-    # hits_files = ['output/decode-morph_unnorm_out.xml', 'output/decode_unnorm_out.xml']
-    # hits_files[1] = 'output/decode_out_cut.xml'
-    # gamma_inputs = [1.75, 0.5]
+    hits_files = ['output/decode-morph_unnorm_out.xml', 'output/decode_unnorm_out.xml']
+    hits_files[1] = 'output/decode_out_cut.xml' # accelerate by dismissing all hits below threshold
+    gamma_inputs = [1.75, 0.5]
     # gamma_inputs = [None, None]
 
-    hits_files = ['lib/kws/word.xml', 'lib/kws/word-sys2.xml', 'lib/kws/morph.xml']
+    # hits_files = ['lib/kws/word.xml', 'lib/kws/word-sys2.xml', 'lib/kws/morph.xml']
     # hits_files = ['lib/kws/word.xml', 'output/decode_out_cut.xml', 'lib/kws/morph.xml']
-    gamma_inputs = [1.5, 1.5, 1]
+    # gamma_inputs = [1.5, 1.5, 1]
     # weights = [1.15, 1.75] + [1]
 
     # # Raw performance
@@ -251,3 +251,19 @@ if __name__ == "__main__":
 # Unnorm inputs --> gamma = 1.0
 # Norm inputs   --> gamma = 1.15
 
+# python combine_hits.py --gamma_output 0.25 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 0.5 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 0.75 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 1.00 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 1.25 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 1.5 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 1.75 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 2.00 --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 2.25 --gamma_inputs 1.75 0.5
+
+
+# Optimal systems
+# python combine_hits.py 
+# python combine_hits.py --gamma_inputs 1.75 0.5
+# python combine_hits.py --gamma_output 1
+# python combine_hits.py --gamma_inputs 1.75 0.5 --gamma_output 1
